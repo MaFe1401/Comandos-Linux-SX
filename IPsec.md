@@ -2,7 +2,7 @@
 
 Práctica de IPsec, parte 1.
 
-# Prévio:
+# Previo:
 
 Se cambia contenido del fichero `etc/ipsec.conf`:
 
