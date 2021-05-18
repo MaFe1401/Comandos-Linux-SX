@@ -119,4 +119,55 @@ Descargar e instalar express y morgan:
 Arrancar el servidor:  
 `sudo node index.js`  
 
-
+## Práctica 4: IPsec  
+### Parte 1: IPsec con PSK  
+Fichero para configurar las conexiones IPsec: `/etc/ipsec.conf`  
+En `/etc/ipsec.conf`, configurando una conexión (se tiene que hacer en ambos routers), los siguientes parámetros indican:  
+`type=tunnel`: La conexión es un tunel para conexión entre routers (se añade una nueva cabecera IP con las direcciones de los routers).  
+`auto=start`: Se carga la conexión e inmediatamente el daemon intenta conectar con la IP indicada en `right`.  
+`keyexchange=ikev1`: Se usa la versión 1 del protocolo IKE.  
+`authby=secret`: Se usa una Pre Shared Key entre los peers.  
+`right=[introducir_IP]`: IP del router/host con el que se quiera establecer la conexión.  
+`rightsubnet=[introducir_red]`: Red o rango que hay detrás del router/host con el que se va a establecer la conexión.  
+`left=[introducir_IP]`: Tu IP (IP del router origen, donde estás configurando el `ipsec.conf`).  
+`leftsubnet=[introducir_red]`: Red o rango que hay detrás del router/host donde se está configurando el `ipsec.conf`.  
+`ike=aes256-sha1-modp3072`: Algoritmos de cifrado y autenticación usados.  
+`esp=aes256-sha1`: Se usa ESP (datos cifrados y autenticados). La otra opción es usar AH (Authentication Header, no cifra).  
+`aggressive=no`: No se usa el modo aggressive.  
+En `/etc/ipsec.secrets` se tiene que añadir la PSK que usarán los dos routers. Tiene que ser la misma en los dos:  
+`[peer_IP_address] : PSK "shared_secret_ejemplo"`  
+Comando para establecer la conexión: `ipsec start --nofork`  
+#### Información teórica útil  
+IKEv1: 2 fases. En la fase 1 se autentican los peers y se negocia la IKE SA. Hay dos modos, el main (6 mensajes, protege la identidad de los peers) y el aggressive (3 mensajes, no protege identidad). En la fase 2 (Quick mode, 3 mensajes) se negocia la IPsec SA.  
+Con ESP en modo túnel el paquete IP entero queda encriptado (se añade un nuevo header IP). Con ESP en modo transporte no se encripta la cabecera IP (por lo tanto no se añade otra). Esto no pasa con AH, ya que no cifra nada, solo autentica. En modo tunel sí que añade una nueva cabecera IP.  
+Para un cifrado extremo a extremo (de un host de una red a un host de otra red), hay que usar el modo transporte (configurar una nueva conexión, mirar en: https://wiki.strongswan.org/projects/strongswan/wiki/UsableExamples#Host-To-Host-transport-mode). De otro modo solo es posible cifrar la conexión entre WLANs (entre routers).  
+### Parte 2: IPsec con certificados  
+Una vez se tienen los certificados, guardar el certificado de la CA en la ruta `/etc/ipsec.d/cacerts` de cada router y el certificado de cada router en `/etc/ipsec.d/certs`. Luego eliminar el password del fichero que contiene la clave privada de cada router con `openssl rsa -in fichero.pem -out fichero.pem`. Este fichero se encuentra en `/rootca/private`.  
+Ejemplo de configuración del fichero `ipsec.conf`:  
+````
+config setup  
+charondebug="all"  
+uniqueids = yes  
+# Add connections here.  
+conn myvpn  
+type=tunnel  
+auto=start  
+keyexchange=ikev1  
+authby=rsasig  
+right=10.0.2.20  
+rightsubnet=192.168.2.0/24  
+left=10.0.2.10  
+leftsubnet=192.168.1.0/24  
+leftcert=certR1.pem  
+leftid=”C=ES, ST=Barcelona, O=UPC, OU=Telematics, CN=R1”  
+rightid=”C=ES, ST=Barcelona, O=UPC, OU=Telematics, CN=R2”  
+ike=aes256-sha1-modp3072  
+esp=aes256-sha1  
+aggressive=yes  
+````
+Ejemplo de configuración del fichero `ipsec.secrets`:  
+````
+: RSA keypairR1.pem  
+````
+#### Información teórica útil  
+En el modo aggressive se usan solo 3 mensajes. Se puede ver la identidad de cada peer y el certificado que adjunta. En main mode, el intercambio de certificados se produce en el quinto y el sexto mensaje, aunque todo va encriptado.
